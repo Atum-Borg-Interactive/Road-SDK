@@ -21,6 +21,12 @@ namespace RoadPro.Generation
             return v.y >= 0f ? r : 2f - r;
         }
 
+        public static float CCWAngle(Vector2 v)
+        {
+            float a = Mathf.Atan2(v.y, v.x);
+            return a < 0f ? a + Mathf.PI * 2f : a;
+        }
+
         public static Vector2 DirFrom(RoadData road, string interId)
         {
             if (road.SrcIntersectionId == interId)
@@ -131,8 +137,9 @@ namespace RoadPro.Generation
 
                     if (elbow.sqrMagnitude < 1e-6f)
                     {
-                        SetInterface(r1, inter.Id, 1f);
-                        SetInterface(r2, inter.Id, 1f);
+                        float dist = EmptyInterface(r1.Width);
+                        SetInterface(r1, inter.Id, dist);
+                        SetInterface(r2, inter.Id, dist);
                         return;
                     }
 

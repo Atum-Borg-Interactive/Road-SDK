@@ -66,6 +66,7 @@ namespace RoadPro.Generation
             if (inter.RoadIds.Contains(roadId)) return;
             inter.RoadIds.Add(roadId);
             SortRoadsByAngle(inter);
+            Intersection.UpdateInterfaceRadius(inter, RoadRegistry.Instance);
         }
 
         public void RemoveRoadFromIntersection(string interId, string roadId)
@@ -84,7 +85,7 @@ namespace RoadPro.Generation
                 var r2 = registry.GetById(b);
                 var d1 = r1 != null ? Intersection.DirFrom(r1, inter.Id) : Vector2.right;
                 var d2 = r2 != null ? Intersection.DirFrom(r2, inter.Id) : Vector2.right;
-                return Intersection.PseudoAngle(d1).CompareTo(Intersection.PseudoAngle(d2));
+                return Intersection.CCWAngle(d1).CompareTo(Intersection.CCWAngle(d2));
             });
         }
 

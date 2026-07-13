@@ -17,6 +17,8 @@ namespace RoadPro.Demo
         [Header("Auto-Setup")]
         public bool createTerrainIfMissing = true;
         public bool addCameraController = true;
+        public bool addStreetlights = true;
+        public bool addTrafficLights = true;
 
         void Awake()
         {
@@ -41,6 +43,12 @@ namespace RoadPro.Demo
 
             if (addCameraController)
                 SetupCamera();
+
+            if (addStreetlights)
+                gameObject.AddComponent<StreetlightSpawner>();
+
+            if (addTrafficLights)
+                gameObject.AddComponent<TrafficLightSpawner>();
         }
 
         void Start()
@@ -136,8 +144,9 @@ namespace RoadPro.Demo
             float h = Input.GetAxis("Horizontal");
             float v = Input.GetAxis("Vertical");
 
-            Vector3 move = new Vector3(h, 0, v) * moveSpeed * Time.deltaTime;
-            transform.Translate(move, Space.World);
+            Vector3 move = (transform.right * h + transform.forward * v) * moveSpeed * Time.deltaTime;
+            move.y = 0;
+            transform.position += move;
 
             float scroll = Input.GetAxis("Mouse ScrollWheel");
             transform.position += transform.forward * scroll * scrollSpeed;

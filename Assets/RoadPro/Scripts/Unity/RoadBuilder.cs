@@ -50,6 +50,14 @@ namespace RoadPro.Unity
         private static readonly Color ColorSnapped = new Color(0.2f, 0.9f, 0.3f, 0.9f);
         private static readonly Color ColorTJunction = new Color(1.0f, 0.6f, 0.1f, 0.9f);
 
+        private const float NODE_SPACING = 10f;
+        private const float NODE_RADIUS = 0.6f;
+
+        private readonly Dictionary<string, List<GameObject>> roadNodes = new Dictionary<string, List<GameObject>>();
+        private readonly Dictionary<string, Vector3[]> roadNodePositions = new Dictionary<string, Vector3[]>();
+        private string hoveredNodeKey;
+        private Material nodeMaterial;
+
         public event Action<RoadData> OnRoadPlaced;
         public event Action<string> OnRoadRemoved;
 
@@ -69,20 +77,25 @@ namespace RoadPro.Unity
 
             CreatePreviewRoad();
             CreateCursorRing();
+            nodeMaterial = ShaderCache.CreateLitNoReflection(new Color(0.29f, 0.40f, 1.0f, 0.5f));
+            nodeMaterial.name = "RoadNode Material";
         }
 
         void Start()
         {
             if (roadMaterial != null)
                 RoadRegistry.Instance.RoadMaterial = roadMaterial;
+            RebuildAllNodes();
         }
 
         void OnDestroy()
         {
+            ClearAllNodes();
             if (previewRoadObj != null) Destroy(previewRoadObj);
             if (cursorRingObj != null) Destroy(cursorRingObj);
             if (cursorFillObj != null) Destroy(cursorFillObj);
             if (previewMaterial != null) Destroy(previewMaterial);
+            if (nodeMaterial != null) Destroy(nodeMaterial);
         }
 
         void Update()
@@ -317,6 +330,7 @@ namespace RoadPro.Unity
 
                 RoadRegistry.Instance.Unregister(rid);
                 OnRoadRemoved?.Invoke(rid);
+                ClearNodesForRoad(rid);
             }
 
             var deadInters = new List<string>();
@@ -350,13 +364,15 @@ namespace RoadPro.Unity
 
             if (hoveredRoadId != null)
             {
+                string origRoadId = hoveredRoadId;
                 string newInterId = IntersectionManager.Instance.CreateIntersection(hoveredRoadSplitPoint, 0.1f);
                 var splitInter = IntersectionManager.Instance.Intersections[newInterId];
                 splitInter.Position = hoveredRoadSplitPoint;
 
-                var (_, roadB) = RoadRegistry.Instance.SplitRoad(hoveredRoadId, newInterId, hoveredRoadSplitPoint, groundLayer);
+                var (_, roadB) = RoadRegistry.Instance.SplitRoad(origRoadId, newInterId, hoveredRoadSplitPoint, groundLayer);
                 if (roadB != null)
                 {
+                    ClearNodesForRoad(origRoadId);
                     startIntersectionId = newInterId;
                     startHitPoint = splitInter.Position;
                     CurrentState = PlaceState.Placing;
@@ -370,10 +386,12 @@ namespace RoadPro.Unity
 
             if (TryFindRoadHit(mouseRay, out string roadId, out Vector3 splitPoint))
             {
+                string origRoadId = roadId;
                 string newInterId = IntersectionManager.Instance.CreateIntersection(splitPoint, SNAP_RADIUS);
-                var (_, roadB) = RoadRegistry.Instance.SplitRoad(roadId, newInterId, splitPoint, groundLayer);
+                var (_, roadB) = RoadRegistry.Instance.SplitRoad(origRoadId, newInterId, splitPoint, groundLayer);
                 if (roadB != null)
                 {
+                    ClearNodesForRoad(origRoadId);
                     if (IntersectionManager.Instance.Intersections.TryGetValue(newInterId, out var splitInter))
                     {
                         var ip = roadB.InterfacedPoints ?? roadB.Points;
@@ -460,6 +478,17 @@ namespace RoadPro.Unity
                 }
             }
 
+            FindNearestNode(out string nodeRoadId, out int nodeIdx, out Vector3 nodePos, out float nodeDist);
+            if (nodeRoadId != null && nodeDist < bestDist)
+            {
+                snappedIntersectionId = null;
+                hoveredRoadId = nodeRoadId;
+                hoveredRoadSplitPoint = nodePos;
+                bestDist = nodeDist;
+                UpdateNodeHighlight();
+                return;
+            }
+
             if (Physics.Raycast(mouseRay, out RaycastHit roadHit, 1000f, roadLayer))
             {
                 var renderer = roadHit.collider.GetComponent<RoadRenderer>();
@@ -490,6 +519,8 @@ namespace RoadPro.Unity
                     }
                 }
             }
+
+            UpdateNodeHighlight();
         }
 
         private Vector3 NearestPointOnPolyLine(PolyLine3 poly, Vector3 point)
@@ -573,13 +604,15 @@ namespace RoadPro.Unity
 
             if (hoveredRoadId != null)
             {
+                string origRoadId = hoveredRoadId;
                 string interId = IntersectionManager.Instance.CreateIntersection(hoveredRoadSplitPoint, 0.1f);
                 var inter = IntersectionManager.Instance.Intersections[interId];
                 inter.Position = hoveredRoadSplitPoint;
 
-                var (_, roadB) = RoadRegistry.Instance.SplitRoad(hoveredRoadId, interId, hoveredRoadSplitPoint, groundLayer);
+                var (_, roadB) = RoadRegistry.Instance.SplitRoad(origRoadId, interId, hoveredRoadSplitPoint, groundLayer);
                 if (roadB != null)
                 {
+                    ClearNodesForRoad(origRoadId);
                     IntersectionManager.Instance.RebuildIntersectionMesh(interId);
                     return interId;
                 }
@@ -956,6 +989,7 @@ namespace RoadPro.Unity
                 string crossInterId = IntersectionManager.Instance.CreateIntersection(cross3D, 0.1f);
                 IntersectionManager.Instance.Intersections[crossInterId].Position = cross3D;
 
+                ClearNodesForRoad(cr.ExistingRoadId);
                 var (splitA, splitB) = RoadRegistry.Instance.SplitRoad(cr.ExistingRoadId, crossInterId, cross3D, groundLayer);
                 if (splitA == null || splitB == null)
                     continue;
@@ -966,12 +1000,13 @@ namespace RoadPro.Unity
             if (orderedInters.Count == 0) return false;
 
             string prev = srcInterId;
+            var createdRoads = new List<RoadData>();
             foreach (var (interId, _) in orderedInters)
             {
-                CreateRoadBetween(prev, interId);
+                createdRoads.Add(CreateRoadBetween(prev, interId));
                 prev = interId;
             }
-            CreateRoadBetween(prev, dstInterId);
+            createdRoads.Add(CreateRoadBetween(prev, dstInterId));
 
             IntersectionManager.Instance.ReapplyAllInterfaces();
 
@@ -981,6 +1016,9 @@ namespace RoadPro.Unity
             RebuildAffectedRoads(affectedInters);
             IntersectionManager.Instance.RebuildAllIntersectionMeshes();
 
+            foreach (var created in createdRoads)
+                OnRoadPlaced?.Invoke(created);
+
             CurrentState = PlaceState.Idle;
             startIntersectionId = null;
             previewRoadObj.SetActive(false);
@@ -988,7 +1026,7 @@ namespace RoadPro.Unity
             return true;
         }
 
-        private void CreateRoadBetween(string srcId, string dstId)
+        private RoadData CreateRoadBetween(string srcId, string dstId)
         {
             var src = IntersectionManager.Instance.Intersections[srcId];
             var dst = IntersectionManager.Instance.Intersections[dstId];
@@ -1038,6 +1076,179 @@ namespace RoadPro.Unity
             RoadRegistry.Instance.Register(road, renderer);
             IntersectionManager.Instance.AddRoadToIntersection(srcId, road.Id);
             IntersectionManager.Instance.AddRoadToIntersection(dstId, road.Id);
+            return road;
+        }
+
+        private void GenerateNodesForRoad(string roadId)
+        {
+            ClearNodesForRoad(roadId);
+            var road = RoadRegistry.Instance?.GetById(roadId);
+            if (road == null) return;
+
+            var poly = road.InterfacedPoints ?? road.Points;
+            if (poly == null || poly.Count < 2) return;
+
+            float len = poly.Length();
+            if (len < NODE_SPACING * 1.5f) return;
+
+            int count = Mathf.Max(1, Mathf.FloorToInt(len / NODE_SPACING));
+            float step = len / (count + 1);
+
+            var positions = new List<Vector3>();
+            var objs = new List<GameObject>();
+
+            for (int i = 0; i < count; i++)
+            {
+                float t = (i + 1) * step;
+                Vector3 pos = poly.PointAlong(t);
+                float groundY = Heightfinder.SampleTerrainHeight(pos, groundLayer);
+                if (!float.IsNaN(groundY))
+                    pos.y = groundY;
+                pos.y += 0.04f;
+
+                positions.Add(pos);
+                objs.Add(BuildNodeSphere(pos));
+            }
+
+            roadNodePositions[roadId] = positions.ToArray();
+            roadNodes[roadId] = objs;
+        }
+
+        private GameObject BuildNodeSphere(Vector3 position)
+        {
+            var go = new GameObject("RoadNode");
+            go.transform.SetParent(transform);
+            go.transform.position = position;
+
+            var mf = go.AddComponent<MeshFilter>();
+            mf.mesh = MakeNodeMesh();
+
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.material = nodeMaterial;
+            return go;
+        }
+
+        private static Mesh nodeMesh;
+
+        private static Mesh MakeNodeMesh()
+        {
+            if (nodeMesh != null) return nodeMesh;
+            nodeMesh = new Mesh();
+
+            int segs = 12;
+            float r = NODE_RADIUS;
+            var verts = new Vector3[segs + 1];
+            var tris = new int[segs * 3];
+            var norms = new Vector3[segs + 1];
+            var cols = new Color[segs + 1];
+
+            verts[0] = Vector3.zero;
+            norms[0] = Vector3.up;
+            cols[0] = Color.white;
+
+            for (int i = 0; i < segs; i++)
+            {
+                float a = (float)i / segs * Mathf.PI * 2f;
+                verts[i + 1] = new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r);
+                norms[i + 1] = Vector3.up;
+                cols[i + 1] = Color.white;
+            }
+
+            for (int i = 0; i < segs; i++)
+            {
+                tris[i * 3] = 0;
+                tris[i * 3 + 1] = i + 1;
+                tris[i * 3 + 2] = (i + 1) % segs + 1;
+            }
+
+            nodeMesh.vertices = verts;
+            nodeMesh.normals = norms;
+            nodeMesh.colors = cols;
+            nodeMesh.triangles = tris;
+            nodeMesh.RecalculateBounds();
+            return nodeMesh;
+        }
+
+        private void ClearNodesForRoad(string roadId)
+        {
+            if (roadNodes.TryGetValue(roadId, out var objs))
+            {
+                foreach (var o in objs)
+                    if (o != null) Destroy(o);
+                roadNodes.Remove(roadId);
+            }
+            roadNodePositions.Remove(roadId);
+        }
+
+        private void ClearAllNodes()
+        {
+            var keys = new List<string>(roadNodes.Keys);
+            foreach (var k in keys)
+                ClearNodesForRoad(k);
+        }
+
+        private void RebuildAllNodes()
+        {
+            ClearAllNodes();
+            if (RoadRegistry.Instance == null) return;
+            foreach (var kvp in RoadRegistry.Instance.Roads)
+                GenerateNodesForRoad(kvp.Key);
+        }
+
+        private void FindNearestNode(out string roadId, out int nodeIndex, out Vector3 nodePos, out float nodeDist)
+        {
+            roadId = null;
+            nodeIndex = -1;
+            nodePos = Vector3.zero;
+            nodeDist = SNAP_RADIUS;
+
+            Vector3 mouseWorld = GetMouseWorldPos();
+            if (float.IsNaN(mouseWorld.x)) return;
+
+            foreach (var kvp in roadNodePositions)
+            {
+                var positions = kvp.Value;
+                for (int i = 0; i < positions.Length; i++)
+                {
+                    float dx = mouseWorld.x - positions[i].x;
+                    float dz = mouseWorld.z - positions[i].z;
+                    float d = Mathf.Sqrt(dx * dx + dz * dz);
+                    if (d < nodeDist)
+                    {
+                        nodeDist = d;
+                        roadId = kvp.Key;
+                        nodeIndex = i;
+                        nodePos = positions[i];
+                    }
+                }
+            }
+        }
+
+        private Vector3 GetMouseWorldPos()
+        {
+            var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if (Physics.Raycast(ray, out RaycastHit hit, 1000f, groundLayer))
+                return hit.point;
+            return new Vector3(float.NaN, float.NaN, float.NaN);
+        }
+
+        private void UpdateNodeHighlight()
+        {
+            if (hoveredNodeKey != null)
+            {
+                Color c = ColorDefault;
+                c.a = 0.5f;
+                nodeMaterial.SetColor("_BaseColor", c);
+                hoveredNodeKey = null;
+            }
+
+            if (hoveredRoadId != null && roadNodePositions.TryGetValue(hoveredRoadId, out _))
+            {
+                Color c = ColorTJunction;
+                c.a = 0.8f;
+                nodeMaterial.SetColor("_BaseColor", c);
+                hoveredNodeKey = hoveredRoadId;
+            }
         }
 
         private void RebuildAffectedRoads(HashSet<string> affectedIntersectionIds)
@@ -1071,6 +1282,7 @@ namespace RoadPro.Unity
                     }
                     ren.RoadData = r;
                     ren.Rebuild();
+                    GenerateNodesForRoad(rid);
                 }
             }
         }
