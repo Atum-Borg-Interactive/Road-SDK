@@ -58,11 +58,39 @@ Updates are handled through the Package Manager.
 3. Select `GameObject > Create Empty` and name it `RoadManager`
 4. Add the `RoadProSetup` component (located in `Assets/RoadPro/Demo/`)
 5. Enter Play Mode
-6. **Left-click** to place road endpoints
-7. **Right-click** to cancel placement
-8. Roads automatically connect, intersections form, and traffic/street lights spawn
+6. Press **R** to enter road placement mode
+7. **Left-click** on the ground to set the first road endpoint
+8. **Left-click** again to set the second endpoint — a road is created
+9. Continue clicking to add more connected roads
+10. Press **Esc** or **Right-click** to cancel placement
+11. Roads automatically form intersections where they cross or meet
 
 > **Note:** The demo script `RoadProSetup` is provided as a starting point. For full control, use the `RoadBuilder`, `TrafficLightSpawner`, and `StreetlightSpawner` components directly.
+
+---
+
+## Controls
+
+| Key / Input | Action |
+|---|---|
+| **R** | Enter road placement mode |
+| **Left-click** | Place road start / end point |
+| **Right-click drag** | Orbit camera |
+| **Scroll wheel** | Zoom in / out |
+| **WASD** | Move camera |
+| **X** | Enter bulldoze mode (remove roads) |
+| **Esc** | Cancel current placement |
+
+### Workflow
+
+1. Press **R** — a preview line follows your mouse
+2. **Left-click** on the ground — anchor the first point
+3. Move the mouse — the preview shows the road path
+4. **Left-click** again — places the road between the two points
+5. The road snaps to terrain height automatically
+6. If the road crosses an existing road, an intersection is created
+7. At 3+ way intersections, traffic lights appear on the right sidewalk
+8. Street lights are placed along both sides of every road
 
 ---
 
