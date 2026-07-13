@@ -1,5 +1,0 @@
-- [ ] Fix IntersectionManager.SortRoadsByAngle to use CCWAngle (replace PseudoAngle sorting).
-- [ ] Fix IntersectionMeshBuilder.BuildBoundaryPolygon edge connections (swap which road edges are connected for each CCW pair).
-- [ ] Fix Intersection.UpdateInterfaceRadius 2-road collinear fallback (remove hardcoded 1f; compute reasonable interface).
-- [ ] Ensure interfaces update after split/join and that intersection meshes rebuild post-update (recalculate interfaces + rebuild intersection meshes).
-- [ ] Run a full rebuild / compile check (Unity play/validate) to verify mid-split/mid-join T-junction meshes.

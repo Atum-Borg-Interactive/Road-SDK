@@ -86,8 +86,24 @@ namespace RoadPro.Unity
 
         private void OnRoadPlaced(RoadData road)
         {
-            if (road != null && !knownRoads.Contains(road.Id))
-                SpawnForRoad(road);
+            if (road == null) return;
+            RefreshIntersectionRoads(road.SrcIntersectionId);
+            RefreshIntersectionRoads(road.DstIntersectionId);
+        }
+
+        private void RefreshIntersectionRoads(string interId)
+        {
+            if (string.IsNullOrEmpty(interId)) return;
+            if (IntersectionManager.Instance == null) return;
+            if (!IntersectionManager.Instance.Intersections.TryGetValue(interId, out var inter))
+                return;
+            var registry = RoadRegistry.Instance;
+            if (registry == null) return;
+            foreach (var rid in inter.RoadIds)
+            {
+                var r = registry.GetById(rid);
+                if (r != null) SpawnForRoad(r);
+            }
         }
 
         private void OnRoadRemoved(string roadId)
@@ -99,13 +115,11 @@ namespace RoadPro.Unity
         public void SpawnForRoad(RoadData road)
         {
             RemoveForRoad(road.Id);
-            if (road.InterfacedPoints == null || road.InterfacedPoints.Count < 2)
+            var poly = road.InterfacedPoints ?? road.Points;
+            if (poly == null || poly.Count < 2)
                 return;
 
-            var poly = road.InterfacedPoints;
             float roadLen = poly.Length();
-            int count = Mathf.Max(1, Mathf.FloorToInt(roadLen / spacing));
-            float adjSpacing = roadLen / (count + 1);
             float halfW = road.Width * 0.5f;
 
             var spawned = new List<GameObject>();
@@ -122,9 +136,10 @@ namespace RoadPro.Unity
             if (walkOffset < 0f)
                 walkOffset = halfW + offsetFromEdge * 0.5f;
 
-            for (int i = 0; i < count; i++)
+            float margin = spacing * 0.3f;
+            float t = margin;
+            while (t <= roadLen - margin)
             {
-                float t = (i + 1) * adjSpacing;
                 var (pos, dir) = poly.PointDirAlong(t);
                 Vector3 fwd = new Vector3(dir.x, 0f, dir.y);
 
@@ -140,6 +155,24 @@ namespace RoadPro.Unity
 
                 spawned.Add(BuildStreetlight(leftSidePos, right));
                 spawned.Add(BuildStreetlight(rightSidePos, -right));
+                t += spacing;
+            }
+
+            if (spawned.Count == 0)
+            {
+                float mid = roadLen * 0.5f;
+                var (pos, dir) = poly.PointDirAlong(mid);
+                Vector3 fwd = new Vector3(dir.x, 0f, dir.y);
+
+                float groundY = Heightfinder.SampleTerrainHeight(pos, terrainLayerMask);
+                if (float.IsNaN(groundY))
+                    groundY = pos.y;
+
+                Vector3 basePos = new Vector3(pos.x, groundY, pos.z);
+                Vector3 right = Vector3.Cross(Vector3.up, fwd).normalized;
+
+                spawned.Add(BuildStreetlight(basePos - right * walkOffset, right));
+                spawned.Add(BuildStreetlight(basePos + right * walkOffset, -right));
             }
 
             streetlights[road.Id] = spawned;

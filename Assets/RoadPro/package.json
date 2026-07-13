@@ -1,0 +1,12 @@
+{
+  "name": "com.atum-borg.roadpro",
+  "version": "1.0.0",
+  "displayName": "Road Pro",
+  "description": "Runtime road placement tool for Unity",
+  "unity": "6000.0",
+  "keywords": ["road", "placement", "runtime", "builder"],
+  "license": "MIT",
+  "author": {
+    "name": "Atum Borg Interactive"
+  }
+}
