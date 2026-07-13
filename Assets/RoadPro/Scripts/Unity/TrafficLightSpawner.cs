@@ -212,7 +212,7 @@ namespace RoadPro.Unity
 
             float faceZ = housingDepth * 0.5f + 0.01f;
             float ySpacing = housingHeight / 4f;
-            float startY = poleHeight + housingHeight * 0.5f - ySpacing * 0.5f;
+            float startY = poleHeight + housingHeight * 0.5f + ySpacing;
 
             Color[] signalColors = {
                 new Color(1f, 0.1f, 0.1f),
