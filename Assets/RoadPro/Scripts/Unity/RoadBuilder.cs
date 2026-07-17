@@ -110,6 +110,7 @@ namespace RoadPro.Unity
                 {
                     SetTool(ToolType.None);
                 }
+                return;
             }
 
             if (!RoadMode)
@@ -266,10 +267,12 @@ namespace RoadPro.Unity
         {
             cursorRingLine.startColor = Color.red;
             cursorRingLine.endColor = Color.red;
-            cursorFillMaterial.SetColor("_BaseColor", new Color(1f, 0f, 0f, 0.2f));
+            cursorFillMaterial.SetColor("_BaseColor", Color.red);
+            cursorFillMaterial.SetFloat("_Alpha", 0.6f);
             SetVisualsActive(true);
             Ray mouseRay = Camera.main.ScreenPointToRay(Input.mousePosition);
-            UpdateCursorRingPosition(mouseRay);
+
+            UpdateBulldozeCursorPosition(mouseRay);
 
             if (TryFindRoadHit(mouseRay, out string roadId, out _))
                 HighlightBulldozeRoad(roadId);
@@ -277,11 +280,34 @@ namespace RoadPro.Unity
                 ClearBulldozeHighlight();
         }
 
+        private void UpdateBulldozeCursorPosition(Ray mouseRay)
+        {
+            Vector3 center;
+            if (Physics.Raycast(mouseRay, out RaycastHit hit, 1000f, groundLayer))
+                center = hit.point;
+            else
+                return;
+
+            float radius = Intersection.MIN_INTERFACE;
+            float innerRadius = radius * 0.75f;
+
+            for (int i = 0; i < RING_SEGMENTS; i++)
+            {
+                float angle = (float)i / RING_SEGMENTS * Mathf.PI * 2f;
+                float x = center.x + Mathf.Cos(angle) * radius;
+                float z = center.z + Mathf.Sin(angle) * radius;
+                cursorRingLine.SetPosition(i, new Vector3(x, center.y + 0.05f, z));
+            }
+
+            BuildCursorFillMesh(center, innerRadius);
+        }
+
         private void HighlightBulldozeRoad(string roadId)
         {
             if (hoveredBulldozeRoadId == roadId) return;
             ClearBulldozeHighlight();
 
+            if (RoadRegistry.Instance == null) return;
             var roadRenderer = RoadRegistry.Instance.GetRenderer(roadId);
             if (roadRenderer != null)
             {
@@ -300,15 +326,18 @@ namespace RoadPro.Unity
         {
             if (hoveredBulldozeRoadId != null)
             {
-                var roadRenderer = RoadRegistry.Instance.GetRenderer(hoveredBulldozeRoadId);
-                if (roadRenderer != null)
+                if (RoadRegistry.Instance != null)
                 {
-                    var meshRenderer = roadRenderer.GetComponent<MeshRenderer>();
-                    if (meshRenderer != null)
+                    var roadRenderer = RoadRegistry.Instance.GetRenderer(hoveredBulldozeRoadId);
+                    if (roadRenderer != null)
                     {
-                        meshRenderer.GetPropertyBlock(bulldozeHighlightProps);
-                        bulldozeHighlightProps.SetColor("_BaseColor", Color.white);
-                        meshRenderer.SetPropertyBlock(bulldozeHighlightProps);
+                        var meshRenderer = roadRenderer.GetComponent<MeshRenderer>();
+                        if (meshRenderer != null)
+                        {
+                            meshRenderer.GetPropertyBlock(bulldozeHighlightProps);
+                            bulldozeHighlightProps.SetColor("_BaseColor", Color.white);
+                            meshRenderer.SetPropertyBlock(bulldozeHighlightProps);
+                        }
                     }
                 }
                 hoveredBulldozeRoadId = null;
@@ -319,6 +348,8 @@ namespace RoadPro.Unity
         {
             Ray mouseRay = Camera.main.ScreenPointToRay(Input.mousePosition);
             if (!TryFindRoadHit(mouseRay, out string roadId, out _)) return;
+
+            ClearBulldozeHighlight();
 
             var visited = new HashSet<string> { roadId };
 
@@ -938,7 +969,8 @@ namespace RoadPro.Unity
 
             var go = new GameObject("Road " + road.Id);
             go.transform.SetParent(transform);
-            go.layer = LayerMask.NameToLayer("Default");
+            go.layer = LayerMask.NameToLayer("Road");
+            if (go.layer == -1) go.layer = LayerMask.NameToLayer("Default");
             if (go.layer == -1) go.layer = 0;
 
             var renderer = go.AddComponent<RoadRenderer>();
@@ -1089,6 +1121,9 @@ namespace RoadPro.Unity
 
             var go = new GameObject("Road " + road.Id);
             go.transform.SetParent(transform);
+            go.layer = LayerMask.NameToLayer("Road");
+            if (go.layer == -1) go.layer = LayerMask.NameToLayer("Default");
+            if (go.layer == -1) go.layer = 0;
             var renderer = go.AddComponent<RoadRenderer>();
             renderer.RoadMaterial = roadMaterial;
             renderer.terrainLayerMask = groundLayer;

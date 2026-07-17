@@ -158,16 +158,20 @@ Attach to the same GameObject as `RoadBuilder`. Automatically spawns street ligh
 
 Road Pro is in active development. Planned improvements include:
 
+- [x] Runtime toolbar with lane pattern picker (Road / Bulldoze)
+- [x] Road deletion with hover highlight (Bulldoze tool)
+- [x] Multi-lane road support (1/2/4/6 Lane, Highway with median & sidewalks)
+- [x] Fixed end cap rendering for odd-lane-count roads
+- [x] Fixed road layer assignment for raycast-based tools
 - [ ] Undo/redo support
-- [ ] Road deletion and modification tools
 - [ ] Highway-style ramps and interchanges
 - [ ] Traffic light timing and state machine
 - [ ] Pedestrian crossing marks
 - [ ] Roundabout support
 - [ ] Save/load road networks
 - [ ] Runtime road editing (drag nodes)
-- [ ] Multi-lane road support
-- [ ] Bridge and tunnel detection
+- [ ] Curve / spline-based road placement
+- [ ] Bridge mode (elevated road)
 - [ ] UnityPackage export
 - [ ] More comprehensive demo scenes
 - [ ] Dedicated documentation website
