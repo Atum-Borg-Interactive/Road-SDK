@@ -146,13 +146,15 @@ namespace RoadPro.Generation
             {
                 Lanes = new List<(LaneKind, LaneDirection)>
                 {
+                    (LaneKind.Walking, LaneDirection.Backward),
                     (LaneKind.Driving, LaneDirection.Backward),
                     (LaneKind.Driving, LaneDirection.Backward),
                     (LaneKind.Driving, LaneDirection.Backward),
                     (LaneKind.Median, LaneDirection.Forward),
                     (LaneKind.Driving, LaneDirection.Forward),
                     (LaneKind.Driving, LaneDirection.Forward),
-                    (LaneKind.Driving, LaneDirection.Forward)
+                    (LaneKind.Driving, LaneDirection.Forward),
+                    (LaneKind.Walking, LaneDirection.Forward)
                 }
             };
         }

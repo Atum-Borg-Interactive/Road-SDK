@@ -125,11 +125,20 @@ namespace RoadPro.Unity
             var spawned = new List<GameObject>();
 
             float walkOffset = -1f;
+            float medianOffset = float.NaN;
             foreach (var lane in road.Lanes)
             {
                 if (lane.Kind == LaneKind.Walking)
                 {
                     walkOffset = halfW - (lane.DistFromBottom + LaneKind.Walking.Width() * 0.5f);
+                    break;
+                }
+            }
+            foreach (var lane in road.Lanes)
+            {
+                if (lane.Kind == LaneKind.Median)
+                {
+                    medianOffset = halfW - (lane.DistFromBottom + LaneKind.Median.Width() * 0.5f);
                     break;
                 }
             }
@@ -155,6 +164,13 @@ namespace RoadPro.Unity
 
                 spawned.Add(BuildStreetlight(leftSidePos, right));
                 spawned.Add(BuildStreetlight(rightSidePos, -right));
+
+                if (!float.IsNaN(medianOffset))
+                {
+                    Vector3 medianPos = basePos + right * medianOffset;
+                    spawned.Add(BuildStreetlight(medianPos, right));
+                }
+
                 t += spacing;
             }
 
@@ -173,6 +189,12 @@ namespace RoadPro.Unity
 
                 spawned.Add(BuildStreetlight(basePos - right * walkOffset, right));
                 spawned.Add(BuildStreetlight(basePos + right * walkOffset, -right));
+
+                if (!float.IsNaN(medianOffset))
+                {
+                    Vector3 medianPos = basePos + right * medianOffset;
+                    spawned.Add(BuildStreetlight(medianPos, right));
+                }
             }
 
             streetlights[road.Id] = spawned;

@@ -128,51 +128,73 @@ namespace RoadPro.Generation
 
             tess.SetNormal(Vector3.up);
 
-            int halfCount = road.Lanes.Count / 2;
-            float prevR = 0f;
-
-            for (int li = halfCount; li < road.Lanes.Count; li++)
+            var slices = new List<(float inner, float outer, Color color, bool isLine)>();
+            for (int li = 0; li < road.Lanes.Count; li++)
             {
                 var lane = road.Lanes[li];
+                float leftEdge = lane.DistFromBottom - halfWidth;
+                float rightEdge = leftEdge + lane.Kind.Width();
+                float absInner, absOuter;
+                bool spansCenter = leftEdge < 0f && rightEdge > 0f;
 
-                if (lane.Kind.IsRail())
+                if (leftEdge >= 0f)
                 {
-                    float railR = lane.DistFromBottom - road.Width * 0.5f + LaneKind.Rail.Width() * 0.5f;
-                    float railInner = Mathf.Max(prevR, railR - LaneKind.Rail.Width() * 0.5f);
-                    float railOuter = Mathf.Min(halfWidth, railR + LaneKind.Rail.Width() * 0.5f);
-                    if (railOuter > railInner + 0.01f)
+                    absInner = leftEdge + LANE_LINE_WIDTH * 0.5f;
+                    absOuter = rightEdge - LANE_LINE_WIDTH * 0.5f;
+                }
+                else if (rightEdge <= 0f)
+                {
+                    absInner = -rightEdge + LANE_LINE_WIDTH * 0.5f;
+                    absOuter = -leftEdge - LANE_LINE_WIDTH * 0.5f;
+                }
+                else
+                {
+                    absInner = 0f;
+                    absOuter = Mathf.Max(-leftEdge, rightEdge) - LANE_LINE_WIDTH * 0.5f;
+                }
+
+                if (absOuter > absInner + 0.001f)
+                {
+                    Color laneColor;
+                    switch (lane.Kind)
                     {
-                        tess.SetColor(RoadColors.RoadMid);
-                        tess.DrawSemicircleStrip(center, forward, railInner, railOuter, seg);
+                        case LaneKind.Walking: laneColor = RoadColors.RoadHig; break;
+                        case LaneKind.Parking: laneColor = RoadColors.RoadLow; break;
+                        case LaneKind.Median:  laneColor = new Color(0.25f, 0.55f, 0.2f, 1f); break;
+                        case LaneKind.Rail:    laneColor = RoadColors.RoadMid; break;
+                        default:               laneColor = RoadColors.RoadMid; break;
                     }
-                    prevR = railOuter;
-                    continue;
+                    slices.Add((absInner, absOuter, laneColor, false));
                 }
 
-                Color laneColor;
-                switch (lane.Kind)
+                if (!spansCenter && absOuter < halfWidth)
                 {
-                    case LaneKind.Walking: laneColor = RoadColors.RoadHig; break;
-                    case LaneKind.Parking: laneColor = RoadColors.RoadLow; break;
-                    case LaneKind.Median:  laneColor = new Color(0.25f, 0.55f, 0.2f, 1f); break;
-                    default:               laneColor = RoadColors.RoadMid; break;
+                    float lineInner = absOuter;
+                    float lineOuter = Mathf.Min(absOuter + LANE_LINE_WIDTH, halfWidth);
+                    if (lineOuter > lineInner + 0.001f)
+                        slices.Add((lineInner, lineOuter, RoadColors.RoadLine, true));
                 }
+            }
 
-                float lineEnd = Mathf.Min(halfWidth, prevR + LANE_LINE_WIDTH);
-                if (lineEnd > prevR + 0.01f)
+            slices.Sort((a, b) => a.inner.CompareTo(b.inner));
+
+            float prevR = 0f;
+            foreach (var (sliceInner, sliceOuter, color, _) in slices)
+            {
+                if (sliceInner > prevR + 0.001f)
                 {
                     tess.SetColor(RoadColors.RoadLine);
-                    tess.DrawSemicircleStrip(center, forward, prevR, lineEnd, seg);
+                    tess.DrawSemicircleStrip(center, forward, prevR, sliceInner, seg);
                 }
-                prevR = lineEnd;
 
-                float laneEnd = Mathf.Min(halfWidth, prevR + lane.Kind.Width() - LANE_LINE_WIDTH);
-                if (laneEnd > prevR + 0.01f)
+                float drawInner = Mathf.Max(sliceInner, prevR);
+                if (sliceOuter > drawInner + 0.001f)
                 {
-                    tess.SetColor(laneColor);
-                    tess.DrawSemicircleStrip(center, forward, prevR, laneEnd, seg);
+                    tess.SetColor(color);
+                    tess.DrawSemicircleStrip(center, forward, drawInner, sliceOuter, seg);
                 }
-                prevR = laneEnd;
+                prevR = Mathf.Max(prevR, sliceOuter);
+                if (prevR >= halfWidth) break;
             }
 
             if (prevR < halfWidth - 0.01f)

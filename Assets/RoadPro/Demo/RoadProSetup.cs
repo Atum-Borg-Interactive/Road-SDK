@@ -36,7 +36,6 @@ namespace RoadPro.Demo
             builder.roadMaterial = roadMaterial;
             builder.SetGroundLayer(groundLayer);
             builder.SetRoadLayer(roadLayer);
-            builder.SetLanePattern(LanePattern.TwoLaneStreet());
 
             if (createTerrainIfMissing)
                 CreateSimpleTerrain();
@@ -49,15 +48,17 @@ namespace RoadPro.Demo
 
             if (addTrafficLights)
                 gameObject.AddComponent<TrafficLightSpawner>();
+
+            gameObject.AddComponent<RoadToolbarUI>();
         }
 
         void Start()
         {
             Debug.Log("[RoadPro] Road generation tool initialized.");
             Debug.Log("[RoadPro] Controls:");
-            Debug.Log("  [R] - Enter road placement mode");
-            Debug.Log("  [X] - Enter bulldoze mode");
-            Debug.Log("  [Esc] - Cancel placement");
+            Debug.Log("  [R] - Road tool (click to place, drag & release; R to toggle)");
+            Debug.Log("  [X] - Bulldoze tool (click to delete roads)");
+            Debug.Log("  [Esc] - Cancel / deselect");
             Debug.Log("  Click & drag - Place road connection");
             Debug.Log("  Right-click drag - Orbit camera");
             Debug.Log("  Scroll wheel - Zoom");

@@ -16,6 +16,9 @@ namespace RoadPro.Unity
 
         public enum PlaceState { Idle, Placing }
         public PlaceState CurrentState { get; private set; } = PlaceState.Idle;
+
+        public enum ToolType { None, Road, Bulldoze }
+        public ToolType ActiveTool { get; private set; } = ToolType.None;
         public bool RoadMode { get; private set; }
         public bool BulldozeMode { get; private set; }
 
@@ -68,8 +71,6 @@ namespace RoadPro.Unity
         {
             ShaderCache.WarmUp();
 
-            cachedPattern = LanePattern.TwoLaneStreet();
-
             if (RoadRegistry.Instance == null)
                 gameObject.AddComponent<RoadRegistry>();
             if (IntersectionManager.Instance == null)
@@ -100,18 +101,6 @@ namespace RoadPro.Unity
 
         void Update()
         {
-            if (Input.GetKeyDown(KeyCode.X))
-            {
-                ToggleBulldozeMode();
-                return;
-            }
-
-            if (Input.GetKeyDown(KeyCode.R))
-            {
-                ToggleRoadMode();
-                return;
-            }
-
             if (BulldozeMode)
             {
                 UpdateBulldozeVisuals();
@@ -119,11 +108,8 @@ namespace RoadPro.Unity
                     HandleBulldozeClick();
                 if (Input.GetKeyDown(KeyCode.Escape))
                 {
-                    BulldozeMode = false;
-                    SetVisualsActive(false);
-                    previewRoadObj.SetActive(false);
+                    SetTool(ToolType.None);
                 }
-                return;
             }
 
             if (!RoadMode)
@@ -140,6 +126,13 @@ namespace RoadPro.Unity
 
             Ray mouseRay = Camera.main.ScreenPointToRay(Input.mousePosition);
 
+            if (cachedPattern == null)
+            {
+                SetVisualsActive(false);
+                previewRoadObj.SetActive(false);
+                return;
+            }
+
             if (CurrentState == PlaceState.Idle)
             {
                 FindSnapTarget(mouseRay);
@@ -155,8 +148,7 @@ namespace RoadPro.Unity
 
                 if (Input.GetKeyDown(KeyCode.Escape))
                 {
-                    RoadMode = false;
-                    SetVisualsActive(false);
+                    SetTool(ToolType.None);
                 }
             }
             else if (CurrentState == PlaceState.Placing)
@@ -210,19 +202,45 @@ namespace RoadPro.Unity
                 roadLayer = LayerMask.GetMask("Default", "Road");
         }
 
+        public void SetTool(ToolType tool)
+        {
+            if (ActiveTool == tool) return;
+
+            bool wasBulldoze = BulldozeMode;
+            ActiveTool = tool;
+
+            RoadMode = tool == ToolType.Road;
+            BulldozeMode = tool == ToolType.Bulldoze;
+
+            if (tool == ToolType.Bulldoze)
+            {
+                CancelPlacement();
+                previewRoadObj.SetActive(false);
+                bulldozeHighlightProps = new MaterialPropertyBlock();
+                ClearBulldozeHighlight();
+            }
+            else if (tool == ToolType.Road)
+            {
+                CancelPlacement();
+                if (wasBulldoze) ClearBulldozeHighlight();
+            }
+            else
+            {
+                CancelPlacement();
+                SetVisualsActive(false);
+                previewRoadObj.SetActive(false);
+                ClearBulldozeHighlight();
+            }
+        }
+
         public void ToggleRoadMode()
         {
-            SetRoadMode(!RoadMode);
+            SetTool(ActiveTool == ToolType.Road ? ToolType.None : ToolType.Road);
         }
 
         public void SetRoadMode(bool active)
         {
-            RoadMode = active;
-            if (!RoadMode)
-            {
-                CancelPlacement();
-                SetVisualsActive(false);
-            }
+            SetTool(active ? ToolType.Road : ToolType.None);
         }
 
         private void SetVisualsActive(bool active)
@@ -236,24 +254,12 @@ namespace RoadPro.Unity
 
         public void SetBulldozeMode(bool active)
         {
-            BulldozeMode = active;
-            if (BulldozeMode)
-            {
-                RoadMode = false;
-                CancelPlacement();
-                previewRoadObj.SetActive(false);
-                bulldozeHighlightProps = new MaterialPropertyBlock();
-            }
-            else
-            {
-                ClearBulldozeHighlight();
-                SetVisualsActive(false);
-            }
+            SetTool(active ? ToolType.Bulldoze : ToolType.None);
         }
 
         public void ToggleBulldozeMode()
         {
-            SetBulldozeMode(!BulldozeMode);
+            SetTool(ActiveTool == ToolType.Bulldoze ? ToolType.None : ToolType.Bulldoze);
         }
 
         private void UpdateBulldozeVisuals()
@@ -360,6 +366,7 @@ namespace RoadPro.Unity
 
         private void HandleIdleClick(Ray mouseRay)
         {
+            if (cachedPattern == null) return;
             ResolveLayers();
 
             if (hoveredRoadId != null)
@@ -754,6 +761,7 @@ namespace RoadPro.Unity
 
         private void UpdatePreviewMesh(Vector3 endHitPoint)
         {
+            if (cachedPattern == null) return;
             var startInter = IntersectionManager.Instance.Intersections[startIntersectionId];
             if (startInter == null) return;
 
@@ -853,6 +861,12 @@ namespace RoadPro.Unity
 
         void ConfirmRoad(string endIntersectionId)
         {
+            if (cachedPattern == null)
+            {
+                CancelPlacement();
+                return;
+            }
+
             if (startIntersectionId == endIntersectionId)
             {
                 CancelPlacement();
@@ -951,6 +965,7 @@ namespace RoadPro.Unity
             startIntersectionId = null;
             previewRoadObj.SetActive(false);
             previewMeshFilter.mesh = null;
+            cachedPattern = null;
         }
 
         void CancelPlacement()
@@ -963,6 +978,8 @@ namespace RoadPro.Unity
 
         private bool TryHandleRoadCrossing(PolyLine3 newRoadPts, string srcInterId, string dstInterId)
         {
+            if (cachedPattern == null) return false;
+
             Vector2 newStart = new Vector2(newRoadPts.Points[0].x, newRoadPts.Points[0].z);
             Vector2 newEnd = new Vector2(newRoadPts.Points[newRoadPts.Points.Count - 1].x, newRoadPts.Points[newRoadPts.Points.Count - 1].z);
 
@@ -1023,11 +1040,14 @@ namespace RoadPro.Unity
             startIntersectionId = null;
             previewRoadObj.SetActive(false);
             previewMeshFilter.mesh = null;
+            cachedPattern = null;
             return true;
         }
 
         private RoadData CreateRoadBetween(string srcId, string dstId)
         {
+            if (cachedPattern == null) return null;
+
             var src = IntersectionManager.Instance.Intersections[srcId];
             var dst = IntersectionManager.Instance.Intersections[dstId];
 
